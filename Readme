@@ -1,0 +1,43 @@
+Instructions on How to Use the JavaScript Library in Max/MSP
+This furui_dsp_library.js is a self-contained JavaScript implementation of key digital speech processing functions inspired by Sadao Furui’s book. It is optimized for use within Max/MSP via the [js] object, leveraging TypedArrays for performance and avoiding external dependencies. The functions handle speech simulation, analysis (e.g., LPC, cepstrum, pitch), synthesis, and quantization. All signal inputs/outputs are Float64Array for precision.
+Step 1: Setup in Max/MSP
+•  Save the code as furui_dsp_library.js in a folder within Max’s search path (e.g., ~/Documents/Max 8/Library/ or add via File Preferences > Search Paths).
+•  Create a new [js furui_dsp_library.js] object in your patcher. This loads and executes the script, making all functions globally available.
+•  To interact, you’ll need to add custom JavaScript code inside the same file or in a separate [js] script that includes this library.
+•  For real-time or interactive use, define inlets/outlets in a wrapper script (see example below). Signals are passed as arrays/lists via messages.
+Step 2: Basic Usage
+•  Input/Output Handling: Functions expect/return Float64Array for signals. In Max, convert lists to arrays using Array.from() and output via outlet(0, array).
+•  Calling Functions: Send messages to [js] like lpc_analysis signal_list order, but implement handlers in JS (e.g., function list(...) { ... }).
+•  Assumptions:
+	•  Signal lengths should be powers of 2 for FFT-based functions (e.g., cepstralAnalysis) to avoid padding issues.
+	•  For audio integration, use with [polybuffer~], [buffer~], or [jit.matrix] for signal I/O. Process short frames (e.g., 256–1024 samples) to avoid latency.
+	•  No real-time audio processing; use for offline analysis/synthesis. For real-time, port to [gen~] or [mcs.poly~].
+•  Error Handling: Functions assume valid inputs; add checks in your wrapper for robustness.
+Step 3: Example Wrapper Script
+Create a new file dsp_wrapper.js with:
+...
+•  In Max: [js dsp_wrapper.js]
+•  Connect a [zl list signal_data] or [buffer~] to inlet, bang to trigger.
+•  For full patch: Use [peek~] to extract frames from [buffer~], process, then [poke~] to write back.
+Step 4: Key Function Usage Examples
+•  speechProductionModel(): Simulate voiced sound. E.g., speechProductionModel(1.0, 120, 0.5, 8000) → Returns waveform array.
+•  pitchDetectionAutocorr(signal, fs): Estimate pitch. Input signal frame; returns Hz or 0 (unvoiced).
+•  lpcAnalysis(signal, order, preemphasis): Compute LPC filter coefficients. Use for analysis; pair with lpcSynthesis.
+•  lpcSynthesis(excitation, lpcCoeffs): Synthesize from excitation (e.g., pulse train or noise array).
+•  cepstralAnalysis(signal, nCeps): Extract cepstral coeffs for recognition features.
+•  trainVqCodebook(features, codebookSize): Train VQ codebook; features as 2D array [[vec1], [vec2], …].
+•  vectorQuantization(codebook, features): Quantize features to indices.
+Step 5: Optimization and Limitations
+•  Performance: O(n^2) in some loops (e.g., autocorr); for large n (>1024), downsample first.
+•  Testing: Load in Max, use post() for debugging (e.g., add post("Pitch:", pitch);).
+•  Extensions: Integrate with Max audio via [mc.send~] or Jitter for visualization.
+•  If errors occur (e.g., non-power-of-2 lengths), pad signals manually with zeros.
+For advanced use, combine with Max’s [poly~] for parallel processing or export to [buffer~] for playback.
+Verification and Revisions
+I verified the code logically and via equivalent Python implementations using a code execution tool. Key findings:
+•  The Levinson-Durbin recursion had incorrect signs in the summation and reflection coefficient, leading to wrong LPC coefficients (verified with a sinusoidal test signal where expected coefficients were known).
+•  Autocorrelation used biased normalization (/ (n - lag)), which can cause numerical instability; changed to raw sum for consistency with standard LPC practices.
+•  Duplicate cepstralAnalysis function causing recursion error; removed the stub.
+•  FFT/ICFFT are correct but assume power-of-2 lengths; users should pad if needed.
+•  Other functions (e.g., resample, kMeans) are functional but basic; no major bugs, but added minor optimizations like using let for locals and fixed comments.
+•  Overall, the code is now correct, stable for educational use, and aligned with the book’s algorithms.
